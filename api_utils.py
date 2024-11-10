@@ -32,14 +32,19 @@ def validate_symbol(symbol):
     return symbol.upper()
 
 def validate_date(date_str):
-    """Validate date string format."""
+    """Validate date string format and check if it's a valid trading date."""
     try:
         date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        if date < datetime.now().date():
-            raise ValueError("Expiration date must be in the future")
+        today = datetime.now().date()
+        
+        if date < today:
+            raise ValueError("Expiration date cannot be in the past")
+        
         return date
     except (ValueError, TypeError) as e:
-        raise ValueError(f"Invalid date format. Use YYYY-MM-DD: {str(e)}")
+        if "time data" in str(e):
+            raise ValueError("Invalid date format. Use YYYY-MM-DD")
+        raise ValueError(str(e))
 
 def get_options_chain(symbol, expiration=None, min_strike=None, max_strike=None):
     """Fetch options chain data from yfinance."""
@@ -66,15 +71,27 @@ def get_options_chain(symbol, expiration=None, min_strike=None, max_strike=None)
         
         if not expirations:
             logger.error(f"No options available for {symbol}")
-            return None
-            
+            raise ValueError(f"No options available for {symbol}")
+        
         logger.info(f"Available expirations: {expirations}")
         
-        # Use first available expiration if none specified
-        exp_date = expiration.strftime('%Y-%m-%d') if expiration else expirations[0]
-        if exp_date not in expirations:
-            logger.error(f"Expiration {exp_date} not available for {symbol}")
-            raise ValueError(f"Expiration date {exp_date} not available")
+        # Handle expiration date selection
+        if expiration:
+            exp_date = expiration.strftime('%Y-%m-%d')
+            if exp_date not in expirations:
+                # Find closest available expiration date
+                available_dates = [datetime.strptime(d, '%Y-%m-%d').date() for d in expirations]
+                future_dates = [d for d in available_dates if d >= expiration]
+                
+                if not future_dates:
+                    raise ValueError(f"No options available for or after {exp_date}. Available dates: {', '.join(expirations)}")
+                
+                closest_date = min(future_dates)
+                exp_date = closest_date.strftime('%Y-%m-%d')
+                logger.info(f"Requested date {expiration} not available, using closest date: {exp_date}")
+        else:
+            # Use first available expiration date
+            exp_date = expirations[0]
             
         # Fetch options chain with retry logic
         opts = None
@@ -93,7 +110,7 @@ def get_options_chain(symbol, expiration=None, min_strike=None, max_strike=None)
                 
         if opts is None:
             logger.error(f"Failed to fetch options chain for {symbol} at {exp_date}")
-            return None
+            raise ValueError(f"Failed to fetch options chain for {symbol} at {exp_date}")
             
         # Combine calls and puts
         calls = opts.calls.to_dict('records')
@@ -116,4 +133,4 @@ def get_options_chain(symbol, expiration=None, min_strike=None, max_strike=None)
         }
     except Exception as e:
         logger.error(f"Error fetching options chain: {str(e)}")
-        return None
+        raise
