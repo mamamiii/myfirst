@@ -662,7 +662,10 @@ dependencies = [
     { name = "flask-cors" },
     { name = "flask-limiter" },
     { name = "flask-sqlalchemy" },
+    { name = "multitasking" },
+    { name = "pandas" },
     { name = "psycopg2-binary" },
+    { name = "requests" },
     { name = "yfinance" },
 ]
 
@@ -673,7 +676,10 @@ requires-dist = [
     { name = "flask-cors", specifier = ">=5.0.0" },
     { name = "flask-limiter", specifier = ">=3.8.0" },
     { name = "flask-sqlalchemy", specifier = ">=3.1.1" },
+    { name = "multitasking", specifier = ">=0.0.11" },
+    { name = "pandas", specifier = ">=2.2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
+    { name = "requests", specifier = ">=2.32.3" },
     { name = "yfinance", specifier = ">=0.2.48" },
 ]
 
