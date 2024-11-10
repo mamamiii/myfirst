@@ -1,12 +1,34 @@
 import yfinance as yf
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 import logging
 import time
+import calendar
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def is_third_friday(date):
+    """Check if the given date is the third Friday of its month."""
+    c = calendar.monthcalendar(date.year, date.month)
+    fridays = [week[calendar.FRIDAY] for week in c if week[calendar.FRIDAY] != 0]
+    third_friday = fridays[2]
+    return date.day == third_friday
+
+def filter_valid_expirations(expirations):
+    """Filter expiration dates to only include monthly contracts at least 30 days in future."""
+    today = datetime.now().date()
+    min_date = today + timedelta(days=30)
+    
+    valid_dates = []
+    for exp in expirations:
+        exp_date = datetime.strptime(exp, '%Y-%m-%d').date()
+        # Check if date is at least 30 days in future and is third Friday
+        if exp_date >= min_date and is_third_friday(exp_date):
+            valid_dates.append(exp)
+    
+    return sorted(valid_dates)
 
 def validate_symbol(symbol):
     """Validate stock symbol format."""
@@ -36,9 +58,14 @@ def validate_date(date_str):
     try:
         date = datetime.strptime(date_str, '%Y-%m-%d').date()
         today = datetime.now().date()
+        min_date = today + timedelta(days=30)
         
         if date < today:
             raise ValueError("Expiration date cannot be in the past")
+        if date < min_date:
+            raise ValueError("Expiration date must be at least 30 days in the future")
+        if not is_third_friday(date):
+            raise ValueError("Only monthly options (third Friday of each month) are supported")
         
         return date
     except (ValueError, TypeError) as e:
@@ -73,25 +100,30 @@ def get_options_chain(symbol, expiration=None, min_strike=None, max_strike=None)
             logger.error(f"No options available for {symbol}")
             raise ValueError(f"No options available for {symbol}")
         
-        logger.info(f"Available expirations: {expirations}")
+        # Filter for valid monthly expirations
+        valid_expirations = filter_valid_expirations(expirations)
+        if not valid_expirations:
+            raise ValueError(f"No valid monthly options available for {symbol} (at least 30 days out)")
+        
+        logger.info(f"Available monthly expirations: {valid_expirations}")
         
         # Handle expiration date selection
         if expiration:
             exp_date = expiration.strftime('%Y-%m-%d')
-            if exp_date not in expirations:
-                # Find closest available expiration date
-                available_dates = [datetime.strptime(d, '%Y-%m-%d').date() for d in expirations]
+            if exp_date not in valid_expirations:
+                # Find closest available monthly expiration date
+                available_dates = [datetime.strptime(d, '%Y-%m-%d').date() for d in valid_expirations]
                 future_dates = [d for d in available_dates if d >= expiration]
                 
                 if not future_dates:
-                    raise ValueError(f"No options available for or after {exp_date}. Available dates: {', '.join(expirations)}")
+                    raise ValueError(f"No valid monthly options available for or after {exp_date}. Available dates: {', '.join(valid_expirations)}")
                 
                 closest_date = min(future_dates)
                 exp_date = closest_date.strftime('%Y-%m-%d')
-                logger.info(f"Requested date {expiration} not available, using closest date: {exp_date}")
+                logger.info(f"Requested date {expiration} not available, using closest monthly date: {exp_date}")
         else:
-            # Use first available expiration date
-            exp_date = expirations[0]
+            # Use first available valid expiration date
+            exp_date = valid_expirations[0]
             
         # Fetch options chain with retry logic
         opts = None
