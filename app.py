@@ -18,6 +18,11 @@ app.config.from_object(Config)
 CORS(app)
 
 # Setup rate limiter
+      
+    
+    
+      
+    
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
@@ -45,6 +50,11 @@ def handle_errors(f):
             logger.error(f"Internal error: {str(e)}")
             return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
     return wrapper
+      
+    
+    
+      
+    
 
 @app.route('/')
 def docs():
